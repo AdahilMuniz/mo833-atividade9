@@ -1,5 +1,7 @@
 - name: "Acao de setup"
   hosts: all
+  vars:
+    results_dir: "{{ user_dir }}/output/cluster-{{ ansible_play_hosts | length }}"
   tasks:
   # Teste simples. A mensagem "Teste SSH OK!" deve ser impressa na tela
   - name: "Task 1: Lista as variáveis recebidas"
@@ -25,3 +27,42 @@
   - name: "Task 4: Reinicia a conexão ssh para que a alterações de grupos tenham efeito"
     ansible.builtin.meta:
       reset_connection
+
+  - name: "Task 5: Instalar dependências"
+    become: true
+    apt:
+      pkg:
+      - docker.io
+      - python3-docker
+      - nfs-common
+      update_cache: yes
+
+  - name: "Task 6 : Criar diretório EFS"
+    file:
+      path: "{{ efs_mount_point }}"
+      state: directory
+      mode: '0777'
+
+  - name: "Task 7: Montar sistema de arquivos compartilhado EFS"
+    become: true
+    mount:
+      path: "{{ efs_mount_point }}"
+      src: "{{ efs_host }}:/"
+      fstype: nfs4
+      opts: nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport
+      state: mounted
+
+  - name: "Task 8: Build Imagem Docker"
+    docker_image:
+      name: dist_dcgan
+      source: build
+      build:
+        path: "{{ user_dir }}/Distributed-DCGAN"
+
+  - name: "Task 9: Criar diretório de resultados"
+    become: true
+    file:
+      path: "{{ results_dir }}"
+      state: directory
+      mode: '0777'
+    run_once: true
